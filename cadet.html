@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Cadet</title>
+<script src="jquery.min.js"></script>
+<script src="debug.js"></script>
+<script src="pouchdb-6.0.7.min.js"></script>
+
+<script>
+$(document).ready (function () {
+var db = null; // database
+/// info to save
+var cadet = null; // no data yet
+var _cadet = { // blank data for new
+_id: "", // project name (prefixes video and .srt files, and used as document id for database)
+textTracks: {}, // text track data built by the browser
+srt: "", // .srt representation
+textTrackFile: "", // file name where data should be downloaded
+videoFile: "", // video file
+path: "" // where files go
+};
+
+
+try {
+db = createDatabase ("cadet");
+statusMessage ("Ready.");
+
+} catch (e) {
+statusMessage (e);
+return;
+} // catch
+
+
+/// user interaction
+
+$(".new").on ("click", function () {
+createProject ($("#projectName").val ());
+return false;
+}); // new
+
+$(".save").on ("click", function () {
+saveProject ();
+return false;
+}); // save
+
+$(".load").on ("click", function () {
+loadProject ($("#projectName").val ());
+}); // load
+
+$(".delete").on ("click", function () {
+deleteProject ($("#projectName").val());
+return false;
+});
+
+
+/// workers
+
+function createDatabase (name) {
+//var db = new PouchDB ("cadet");
+var db = new PouchDB("http://localhost:5984/cadet");
+
+if (!db) {
+alert ("no database server");
+return null;
+} // if
+
+db.info ().then (function (info) {
+if (info.db_name !== name) {
+throw new Error ("cannot create database");
+} // if
+
+}).catch (function (error) {
+throw new Error (error);
+});
+
+return db;
+} // createDatabase
+
+function createProject (name) {
+if (! name) {
+statusMessage ("need a project name first");
+return;
+} // if
+
+db.get (name).then (function (data) {
+statusMessage ("Project " + data._id + " already exists.");
+}).catch (function () {
+cadet = Object.assign ({}, _cadet); // copy
+cadet._id = name;
+
+//debug ("createProject: ", cadet);
+store (cadet);
+}); // document doesn't exist, so create
+} // createProject
+
+function deleteProject (name) {
+if (!cadet && !name) {
+statusMessage ("No project to delete.");
+return;
+} // if
+
+if (! cadet && name) {
+db.get (name).then (function (data) {
+if (confirm ("Are you sure?")) {
+deleteDocument (data);
+} // if
+}).catch (function (error) {
+statusMessage (error.message);
+});
+
+} else {
+if (confirm ("Are you sure?")) {
+deleteDocument (cadet);
+cadet = null;
+} // if
+} // if
+} // deleteProject
+
+function saveProject () {
+if (cadet) {
+store (cadet);
+} else {
+statusMessage ("no project - click new first");
+} // if
+} // saveProject
+
+function loadProject (name) {
+if (name) {
+load (name);
+} else {
+statusMessage ("Need a project name.");
+} // if
+} // loadProject
+
+
+function store (data) {
+debug ("storing " + data._rev);
+db.put (data).then (function (response) {
+//debug ("store: ", response);
+if (response.ok) {
+cadet._rev = response.rev;
+statusMessage ("Project saved.");
+} else {
+statusMessage ("Project not saved.");
+} // if
+
+}).catch (function (error) {
+statusMessage (error.message);
+});
+} // store
+
+function load (name) {
+if (! name) {
+statusMessage ("Need a project name first.");
+return;
+} // if
+
+db.get (name).then (function (data) {
+cadet = Object.assign ({}, data); // copy
+debug ();
+debug ("loaded: ", cadet);
+}).catch (function (error) {
+statusMessage (error.message);
+});
+} // load
+
+function deleteDocument (data) {
+if (! data) {
+statusMessage ("No data given.");
+return;
+} // if
+db.remove (data).then (function (response) {
+if (response.ok) {
+statusMessage ("Project deleted.");
+} else {
+statusMessage ("Project not deleted.");
+} // if
+
+}).catch (function (error) {
+statusMessage (error.message);
+});
+} // deleteDocument
+
+function statusMessage (message) {
+$("#status").text (message);
+} // statusMessage
+
+}); // ready
+
+alert ("loaded");
+</script>
+</head>
+<body>
+<h1 class="title">Cadet</h1>
+
+<nav aria-label="Cadet">
+<label>Project name: <input type="text" id="projectName"></label>
+<button class="new">New</button>
+<button class="load">Load</button>
+<button class="save">Save</button>
+<button class="delete">Delete</button>
+</nav>
+
+<main>
+<div id="status" role="region" aria-live="polite" aria-label="Status">
+</div>
+
+<section class="video" role="region" aria-label="Video">
+<video controls></video>
+
+</section><section class="text-data" role="region" aria-label="Text data">
+
+<table></table>
+
+</section>
+
+</main>
+
+<div id="debug" role="region" aria-live="polite">
+</div>
+
+</body>
+</html>
